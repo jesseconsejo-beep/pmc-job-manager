@@ -1,1 +1,96 @@
 @import "tailwindcss";
+
+/*
+ * Brand colours are white-label settings. The root layout writes
+ * --color-primary / --color-secondary on <html> from org_settings;
+ * these are only the fallbacks (the Phase 1 palette).
+ */
+:root {
+  --color-primary: #f5c518;
+  --color-secondary: #5b8db8;
+}
+
+@theme inline {
+  --color-brand: var(--color-primary);
+  --color-brand-dim: color-mix(in srgb, var(--color-primary) 55%, #000);
+  --color-steel: var(--color-secondary);
+  --color-steel-dark: color-mix(in srgb, var(--color-secondary) 50%, #000);
+
+  --color-bg: #0a0d10;
+  --color-surface: #13181d;
+  --color-surface-2: #1c232a;
+  --color-line: #2a3138;
+  --color-line-2: #3a434c;
+  --color-ink: #e8ecef;
+  --color-dim: #8a96a0;
+  --color-faint: #5a6670;
+  --color-danger: #e85d4a;
+  --color-ok: #4ab07a;
+  --color-warn: #e89545;
+
+  --font-display: var(--font-oswald), "Oswald", system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), "JetBrains Mono", ui-monospace, monospace;
+}
+
+html {
+  background: var(--color-bg);
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+/* The industrial hazard strip from the Phase 1 header. */
+.hazard-strip {
+  height: 6px;
+  background: repeating-linear-gradient(
+    135deg,
+    var(--color-primary),
+    var(--color-primary) 20px,
+    var(--color-bg) 20px,
+    var(--color-bg) 40px
+  );
+}
+
+/* Inputs: 16px stops iOS Safari zooming on focus. */
+.input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-line);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  outline: none;
+  border-radius: 0;
+}
+.input:focus {
+  border-color: var(--color-primary);
+}
+.input::placeholder {
+  color: var(--color-faint);
+}
+select.input {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--color-dim) 50%),
+    linear-gradient(135deg, var(--color-dim) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 28px;
+}
+input[type="date"].input::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+}
+
+/* Angled corner used on primary call-to-action buttons in Phase 1. */
+.clip-cta {
+  clip-path: polygon(0 0, 100% 0, 100% 75%, 92% 100%, 0 100%);
+}
