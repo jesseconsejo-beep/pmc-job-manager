@@ -1,3 +1,4 @@
+import { HardHat } from "lucide-react";
 import { getOrg } from "@/lib/org";
 import { LoginForm } from "./LoginForm";
 
@@ -23,12 +24,14 @@ export default async function LoginPage() {
               <img src={org.logoUrl} alt="" className="h-12 w-12 rounded object-contain" />
             ) : (
               <span className="flex h-12 w-12 items-center justify-center bg-brand font-display text-base font-bold text-bg">
-                {org.companyShort.slice(0, 3).toUpperCase()}
+                {org.source === "database" ? org.companyShort.slice(0, 3).toUpperCase() : <HardHat size={26} />}
               </span>
             )}
             <div className="min-w-0">
               <div className="font-display text-xl font-semibold uppercase leading-none tracking-wider">Job Manager</div>
-              <div className="mt-1 truncate text-[10px] uppercase tracking-[2px] text-dim">{org.companyName}</div>
+              {org.source === "database" && (
+                <div className="mt-1 truncate text-[10px] uppercase tracking-[2px] text-dim">{org.companyName}</div>
+              )}
             </div>
           </div>
           <div className="border-2 border-brand bg-surface p-6">
