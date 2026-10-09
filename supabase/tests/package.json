@@ -1,0 +1,7 @@
+{
+  "name": "pmc-db-tests",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node run.mjs" },
+  "devDependencies": { "embedded-postgres": "17.10.0-beta.17", "pg": "^8.13.0" }
+}
