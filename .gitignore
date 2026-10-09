@@ -1,7 +1,28 @@
+# dependencies
 node_modules/
+/.pnp
+.pnp.*
+
+# local postgres used by supabase/tests
 .pgdata/
+
+# env files: never commit secrets; the template is fine
 .env
 .env.*
 !.env.example
+
+# next.js
 .next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# vercel
+.vercel
+
+# misc
+.DS_Store
+*.pem
 *.log
+/coverage
