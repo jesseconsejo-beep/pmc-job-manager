@@ -24,6 +24,8 @@ docs/                  decisions, the Phase 1 artifact (UI spec), original hand-
 | 0001_baseline | Schema as hand-applied on 2026-10-03 | applied (by hand) |
 | 0002_hardening | Closes 4 RLS holes; invite-only signup; admin-only deletes; append-only audit | **to apply** |
 | 0003_org_settings | White-label settings, role + category catalogs, pay-period function | **to apply** |
+| 0004_public_branding | `public_branding()` for the signed-out pages (anon may call) | **to apply** |
+| 0005_role_tiers | Permission tiers (developer/owner/manager/employee), last-owner guard, super-only settings | **to apply** |
 
 Apply to prod in order by pasting 0002 then 0003 into the Supabase SQL editor
 (or `supabase db push` once the CLI is linked). Never edit tables in the dashboard.
@@ -33,9 +35,15 @@ Apply to prod in order by pasting 0002 then 0003 into the Supabase SQL editor
    The invites table is defence in depth; this is the front door.
 2. Confirm the owner row: `select email, role, active from profiles;`
 
+### Auth emails (Supabase dashboard > Authentication)
+- URL Configuration: Site URL = the app's URL; add `<site>/auth/confirm` to Redirect URLs.
+- Email templates: Invite user link = `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite`;
+  Reset password link = `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery`.
+- `SUPABASE_SECRET_KEY` must be set (server only) for invites and account deletion.
+
 ## Tenant bootstrap (new company)
 
-1. New Supabase project. Run 0001, 0002, 0003.
+1. New Supabase project. Run every migration in order (0001 onward).
 2. Edit the single `org_settings` row: name, short name, colours, timezone,
    `pay_period_anchor_end` (the end date of any real pay period), prefixes.
 3. First owner: have them sign up (they land inactive), then run once:
