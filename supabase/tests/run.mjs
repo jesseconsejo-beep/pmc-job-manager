@@ -148,7 +148,7 @@ async function main() {
     eq(j.rows[0].n, 0, 'visible jobs');
   });
   await test('PM cannot invite an owner; owner can', async () => {
-    await expectError(as(scott, `insert into invites (email, role) values ('x@example.test','owner')`), /Only an owner can invite an owner/);
+    await expectError(as(scott, `insert into invites (email, role) values ('x@example.test','owner')`), /Only an owner or developer can invite/);
     await as(matt, `insert into invites (email, role) values ('x@example.test','owner')`);
   });
   await test('foreman cannot read or create invites', async () => {
@@ -159,7 +159,7 @@ async function main() {
 
   console.log('\nprofiles / privilege escalation');
   await test('foreman cannot promote self to owner', async () => {
-    await expectError(as(dan, `update profiles set role = 'owner' where id = $1`, [dan]), /Only owners or PMs/);
+    await expectError(as(dan, `update profiles set role = 'owner' where id = $1`, [dan]), /Only managers and above/);
   });
   await test('foreman can edit own name and phone', async () => {
     const r = await as(dan, `update profiles set name = 'Dan F', phone = '604-555-0100' where id = $1`, [dan]);
@@ -171,12 +171,12 @@ async function main() {
   });
   await test('PM can change a role but not grant owner', async () => {
     await as(scott, `update profiles set role = 'superintendent' where id = $1`, [dan]);
-    await expectError(as(scott, `update profiles set role = 'owner' where id = $1`, [dan]), /Only an owner can grant/);
+    await expectError(as(scott, `update profiles set role = 'owner' where id = $1`, [dan]), /Only an owner or developer can grant/);
     await as(matt, `update profiles set role = 'foreman' where id = $1`, [dan]);
   });
   await test('owner cannot change own role or deactivate self', async () => {
-    await expectError(as(matt, `update profiles set role = 'pm' where id = $1`, [matt]), /cannot change your own/);
-    await expectError(as(matt, `update profiles set active = false where id = $1`, [matt]), /cannot change your own/);
+    await expectError(as(matt, `update profiles set role = 'pm' where id = $1`, [matt]), /cannot change your own|last active owner/);
+    await expectError(as(matt, `update profiles set active = false where id = $1`, [matt]), /cannot change your own|last active owner/);
   });
 
   console.log('\ntimesheets');
@@ -320,6 +320,55 @@ async function main() {
     if (r.rows[0].n < 2) throw new Error(`office-as-admin should see all sheets, saw ${r.rows[0].n}`);
     await as(matt, `update role_catalog set is_admin = false where key = 'office'`);
     await as(matt, `update profiles set role = 'foreman' where id = $1`, [eve]);
+  });
+
+  console.log('\npublic branding (0004)');
+  await test('anon reads branding through public_branding() but not org_settings', async () => {
+    const r = await as('anon', `select company_short, assistant_name from public_branding()`);
+    eq(r.rows[0], { company_short: 'PMC', assistant_name: 'MattGPT' }, 'branding');
+    const s = await as('anon', `select count(*)::int as n from org_settings`);
+    eq(s.rows[0].n, 0, 'org_settings rows visible to anon');
+  });
+
+  console.log('\nrole tiers (0005)');
+  await test('tiers assigned and developer role exists', async () => {
+    const r = await as(matt, `select key, tier from role_catalog where key in ('developer','owner','pm','foreman') order by key`);
+    eq(r.rows, [
+      { key: 'developer', tier: 'developer' }, { key: 'foreman', tier: 'employee' },
+      { key: 'owner', tier: 'owner' }, { key: 'pm', tier: 'manager' },
+    ], 'tiers');
+  });
+  await test('owner cannot grant developer; developer can', async () => {
+    await expectError(as(matt, `update profiles set role = 'developer' where id = $1`, [dan]), /Only a developer can grant/);
+    await as(null, `update profiles set role = 'developer' where id = $1`, [scott]);
+    await as(scott, `update profiles set role = 'developer' where id = $1`, [dan]);
+    await as(scott, `update profiles set role = 'foreman' where id = $1`, [dan]);
+  });
+  await test('PM cannot change company settings; developer can', async () => {
+    await as(matt, `update profiles set role = 'pm' where id = $1`, [eve]);
+    const pm = await as(eve, `update org_settings set company_short = 'X'`);
+    eq(pm.rowCount, 0, 'pm rows');
+    const dev = await as(scott, `update org_settings set company_short = 'PMC'`);
+    eq(dev.rowCount, 1, 'developer rows');
+    await as(matt, `update profiles set role = 'foreman' where id = $1`, [eve]);
+  });
+  await test('last owner/developer cannot be deactivated or deleted', async () => {
+    await as(null, `update profiles set role = 'pm' where id = $1`, [scott]);
+    await expectError(as(null, `update profiles set active = false where id = $1`, [matt]), /last active owner or developer/);
+    await expectError(as(null, `delete from auth.users where id = $1`, [matt]), /last active owner or developer/);
+    await as(null, `update profiles set role = 'owner' where id = $1`, [scott]);
+    const ok = await as(null, `update profiles set active = false where id = $1 returning active`, [scott]);
+    eq(ok.rows[0].active, false, 'second owner deactivated once another exists');
+    await as(null, `update profiles set active = true, role = 'pm' where id = $1`, [scott]);
+  });
+  await test('only supers delete profiles, never themselves', async () => {
+    const victim = await signup('temp@example.test', 'Temp');
+    const r = await as(scott, `delete from profiles where id = $1`, [victim]);
+    eq(r.rowCount, 0, 'pm deletes');
+    const self = await as(matt, `delete from profiles where id = $1`, [matt]);
+    eq(self.rowCount, 0, 'self delete');
+    const ok = await as(matt, `delete from profiles where id = $1`, [victim]);
+    eq(ok.rowCount, 1, 'owner deletes');
   });
 
   console.log(`\n${passes} passed, ${failures} failed`);
