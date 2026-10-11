@@ -3,18 +3,29 @@ import { NextResponse, type NextRequest } from "next/server";
 import { supabasePublishableKey, supabaseUrl } from "@/lib/env";
 import type { Database } from "@/lib/types";
 
-const PUBLIC_PATHS = ["/login"];
+/** Signed-out pages; a signed-in active member is sent home from these. */
+const PUBLIC_PATHS = ["/login", "/forgot"];
+/** Always passed through: the email-link landing verifies its own token. */
+const OPEN_PATHS = ["/auth/confirm"];
+/** Needs a session, but any profile state (invitees and resets land here). */
+const SESSION_ANY_STATE_PATHS = ["/set-password"];
 const PENDING_PATH = "/pending";
 
+function matches(paths: readonly string[], pathname: string): boolean {
+  return paths.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
 function isPublic(pathname: string): boolean {
-  return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  return matches(PUBLIC_PATHS, pathname);
 }
 
 /**
  * Refreshes the Supabase session cookie on every request and routes people:
- *   no session            -> /login (except /login itself)
+ *   /auth/confirm         -> always through (it verifies the emailed token)
+ *   no session            -> /login (except /login and /forgot)
+ *   session, /set-password-> through, active or not
  *   session, inactive     -> /pending
- *   session, active       -> away from /login and /pending
+ *   session, active       -> away from /login, /forgot and /pending
  * Pages re-check this on the server; the middleware is the front door, not the lock.
  */
 export async function updateSession(request: NextRequest) {
@@ -49,9 +60,13 @@ export async function updateSession(request: NextRequest) {
     return redirect;
   };
 
+  if (matches(OPEN_PATHS, pathname)) return response;
+
   if (!userId) {
     return isPublic(pathname) ? response : redirectTo("/login");
   }
+
+  if (matches(SESSION_ANY_STATE_PATHS, pathname)) return response;
 
   const { data: profile } = await supabase
     .from("profiles")
