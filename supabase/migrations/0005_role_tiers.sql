@@ -36,7 +36,7 @@ $$;
 drop trigger if exists role_catalog_sync_flags on role_catalog;
 create trigger role_catalog_sync_flags before insert or update on role_catalog
   for each row execute function sync_role_flags();
-update role_catalog set tier = tier;  -- re-derive the flags for the seeded rows
+update role_catalog set tier = tier where key is not null;  -- re-derive the flags for the seeded rows
 
 -- Tier helpers
 create or replace function user_tier(u uuid) returns text
