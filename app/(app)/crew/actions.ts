@@ -202,16 +202,7 @@ export async function deleteAccount(userId: string, typedEmail: string): Promise
     return fail(message(e));
   }
 
-  // invites.accepted_user / invited_by reference profiles without ON DELETE,
-  // so an invited person could never be deleted. Detach them first (the
-  // service role skips the invite trigger, which would re-stamp invited_by).
-  const detach = await Promise.all([
-    admin.from("invites").update({ accepted_user: null }).eq("accepted_user", userId),
-    admin.from("invites").update({ invited_by: null }).eq("invited_by", userId),
-  ]);
-  const detachErr = detach.find((r) => r.error)?.error;
-  if (detachErr) return fail(`Could not detach their invite records: ${detachErr.message}`);
-
+  // 0006: the invite row cascades with the profile; other soft references clear.
   const { error } = await admin.auth.admin.deleteUser(userId);
   if (error) {
     if (/database error/i.test(error.message)) {
