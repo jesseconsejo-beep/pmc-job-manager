@@ -123,8 +123,11 @@ async function main() {
       { email: 'dan@example.test', role: 'foreman', active: true },
       { email: 'scott@example.test', role: 'pm', active: true },
     ], 'profiles');
-    const inv = await as(null, `select count(*)::int as n from invites where accepted_at is not null`);
-    eq(inv.rows[0].n, 4, 'accepted invites');
+    const inv = await as(null, `select count(*)::int as linked, count(accepted_at)::int as accepted from invites where accepted_user is not null`);
+    eq(inv.rows[0], { linked: 4, accepted: 0 }, 'invites linked but pending until first sign-in');
+    await as(null, `update auth.users set last_sign_in_at = now() where id = $1`, [scott]);
+    const acc = await as(null, `select accepted_at is not null as done from invites where accepted_user = $1`, [scott]);
+    eq(acc.rows[0].done, true, 'accepted on first sign-in');
   });
   await test('uninvited signup is parked inactive and sees no jobs', async () => {
     const p = await as(null, `select role, active from profiles where id = $1`, [rando]);
@@ -314,11 +317,11 @@ async function main() {
     eq(r.rows[0], { n: 11, refs: 68 }, 'catalog');
   });
   await test('role catalog drives admin checks', async () => {
-    await as(matt, `update role_catalog set is_admin = true where key = 'office'`);
+    await as(matt, `update role_catalog set tier = 'manager' where key = 'office'`);
     await as(matt, `update profiles set role = 'office' where id = $1`, [eve]);
     const r = await as(eve, `select count(*)::int as n from timesheets`);
     if (r.rows[0].n < 2) throw new Error(`office-as-admin should see all sheets, saw ${r.rows[0].n}`);
-    await as(matt, `update role_catalog set is_admin = false where key = 'office'`);
+    await as(matt, `update role_catalog set tier = 'employee' where key = 'office'`);
     await as(matt, `update profiles set role = 'foreman' where id = $1`, [eve]);
   });
 
@@ -369,6 +372,21 @@ async function main() {
     eq(self.rowCount, 0, 'self delete');
     const ok = await as(matt, `delete from profiles where id = $1`, [victim]);
     eq(ok.rowCount, 1, 'owner deletes');
+  });
+
+  console.log('\ninvite lifecycle + deletion (0006)');
+  await test('deleting a person clears soft references, keeps history blocking', async () => {
+    const tmp = await signup('tmp2@example.test', 'Tmp');
+    await as(null, `update profiles set active = true, role = 'foreman' where id = $1`, [tmp]);
+    const j = (await as(matt, `insert into jobs (job_name, created_by) values ('by tmp', $1) returning id`, [tmp])).rows[0].id;
+    await as(matt, `insert into job_assignments (job_id, user_id) values ($1, $2)`, [j, tmp]);
+    const ok = await as(matt, `delete from profiles where id = $1`, [tmp]);
+    eq(ok.rowCount, 1, 'deleted');
+    const job = await as(matt, `select created_by from jobs where id = $1`, [j]);
+    eq(job.rows[0].created_by, null, 'created_by cleared');
+    const asg = await as(matt, `select count(*)::int as n from job_assignments where user_id = $1`, [tmp]);
+    eq(asg.rows[0].n, 0, 'assignment gone');
+    await expectError(as(matt, `delete from profiles where id = $1`, [dan]), /violates foreign key|still referenced/);
   });
 
   console.log(`\n${passes} passed, ${failures} failed`);

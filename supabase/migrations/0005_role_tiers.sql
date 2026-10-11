@@ -27,16 +27,16 @@ alter table role_catalog add constraint role_catalog_tier_check
 create or replace function sync_role_flags() returns trigger
 language plpgsql as $$
 begin
-  if new.tier in ('developer','owner','manager') then
-    new.is_admin := true;
-    new.can_approve_timesheets := true;
-  end if;
+  -- flags are derived from the tier; a title cannot out-rank its tier
+  new.is_admin := new.tier in ('developer','owner','manager');
+  new.can_approve_timesheets := new.tier in ('developer','owner','manager');
   return new;
 end;
 $$;
 drop trigger if exists role_catalog_sync_flags on role_catalog;
 create trigger role_catalog_sync_flags before insert or update on role_catalog
   for each row execute function sync_role_flags();
+update role_catalog set tier = tier;  -- re-derive the flags for the seeded rows
 
 -- Tier helpers
 create or replace function user_tier(u uuid) returns text
@@ -129,7 +129,9 @@ create trigger profiles_protect_last_super before update or delete on profiles
 
 -- Deleting a profile from the app goes through the auth admin API (the auth
 -- user is removed and the profile cascades). Only supers may delete, enforced
--- here for direct deletes too, and history (timesheets, activity) blocks it.
+-- here for direct deletes too. History (timesheets, activity_log) keeps its
+-- RESTRICT foreign keys, so a person with records cannot be deleted; the app
+-- says to deactivate instead (see 0006 for the soft references).
 drop policy if exists profiles_admin_all on profiles;
 create policy profiles_admin_read   on profiles for select using (is_owner_or_admin());
 create policy profiles_admin_update on profiles for update using (is_owner_or_admin());
