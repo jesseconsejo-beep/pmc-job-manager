@@ -1,5 +1,5 @@
 // Hand-written row types for the tables this app touches.
-// Source of truth: supabase/migrations/0001..0003. Keep in step with them.
+// Source of truth: supabase/migrations/0001..0005. Keep in step with them.
 
 export type JobStatus = "active" | "on_hold" | "complete" | "archived";
 export const JOB_STATUSES: readonly JobStatus[] = ["active", "on_hold", "complete", "archived"];
@@ -109,6 +109,41 @@ export type OrgSettings = {
   updated_by: string | null;
 };
 
+/** Permission tiers (0005). Titles are labels under a tier; permissions follow the tier. */
+export type Tier = "developer" | "owner" | "manager" | "employee";
+
+export type RoleCatalogRow = {
+  key: string;
+  label: string;
+  rank: number;
+  is_admin: boolean;
+  can_approve_timesheets: boolean;
+  sort: number;
+  /** Null only on a database that has not had 0005 applied yet. */
+  tier: Tier | null;
+};
+
+export type Invite = {
+  id: string;
+  email: string;
+  role: string;
+  name: string | null;
+  invited_by: string | null;
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+  accepted_user: string | null;
+};
+
+export type PublicBranding = {
+  company_name: string;
+  company_short: string;
+  logo_path: string | null;
+  color_primary: string;
+  color_secondary: string;
+  assistant_name: string;
+};
+
 export type ProgressCategory = {
   key: string;
   label: string;
@@ -139,9 +174,14 @@ export type Database = {
       activity_log: Table<ActivityLog, "event_type" | "description">;
       org_settings: Table<OrgSettings, "company_name" | "company_short">;
       progress_categories: Table<ProgressCategory, "key" | "label">;
+      role_catalog: Table<RoleCatalogRow, "key" | "label" | "rank">;
+      invites: Table<Invite, "email">;
+      timesheets: Table<{ id: string; employee_id: string | null }, "id">;
     };
     Views: { [_ in never]: never };
-    Functions: { [_ in never]: never };
+    Functions: {
+      public_branding: { Args: Record<string, never>; Returns: PublicBranding[] };
+    };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };
   };

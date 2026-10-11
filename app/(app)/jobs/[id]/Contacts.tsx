@@ -5,6 +5,7 @@ import { Mail, Pencil, Phone, Plus, Trash2, User } from "lucide-react";
 import { addContact, deleteContact, updateContact } from "../actions";
 import { ErrorNote, Label } from "@/components/ui";
 import { telHref } from "@/lib/jobs";
+import { downloadVCard } from "@/lib/vcard";
 import type { Contact } from "@/lib/types";
 import type { ActionResult } from "@/lib/validate";
 
@@ -98,30 +99,15 @@ function ContactCard({
   };
 
   // vCard so a contact can be saved straight into iPhone Contacts (Phase 1 SAVE button).
-  const saveVCard = () => {
-    const lines = [
-      "BEGIN:VCARD",
-      "VERSION:3.0",
-      `FN:${c.name}`,
-      `N:${c.name};;;;`,
-      c.role && `TITLE:${c.role}`,
-      `ORG:${jobName}`,
-      c.phone && `TEL;TYPE=CELL:${c.phone}`,
-      c.email && `EMAIL:${c.email}`,
-      `NOTE:Site contact for ${jobName}`,
-      "END:VCARD",
-    ]
-      .filter(Boolean)
-      .join("\r\n");
-    const url = URL.createObjectURL(new Blob([lines], { type: "text/vcard" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${c.name}.vcf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
+  const saveVCard = () =>
+    downloadVCard({
+      name: c.name,
+      title: c.role,
+      org: jobName,
+      phone: c.phone,
+      email: c.email,
+      note: `Site contact for ${jobName}`,
+    });
 
   return (
     <div className={`border border-line bg-bg p-3 ${pending ? "opacity-50" : ""}`}>

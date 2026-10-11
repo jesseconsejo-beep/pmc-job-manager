@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { DEFAULT_TIMEZONE, safeTimeZone } from "@/lib/dates";
-import type { OrgSettings } from "@/lib/types";
+import type { OrgSettings, PublicBranding } from "@/lib/types";
 
 /** What the app needs from org_settings, with defaults applied. */
 export type Org = {
@@ -43,7 +43,8 @@ function text(value: string | null | undefined, fallback: string): string {
   return v ? v : fallback;
 }
 
-function logoUrl(path: string | null): string | null {
+/** Public URL of an object in the 'branding' bucket. */
+export function logoUrl(path: string | null): string | null {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!path || !base) return null;
   const clean = path.replace(/^\/+/, "").split("/").map(encodeURIComponent).join("/");
@@ -65,18 +66,50 @@ export function toOrg(row: OrgSettings): Org {
   };
 }
 
+/** Branding-only Org from public_branding(); every other field keeps its default. */
+function fromBranding(row: PublicBranding): Org {
+  return {
+    ...DEFAULT_ORG,
+    companyName: text(row.company_name, DEFAULT_ORG.companyName),
+    companyShort: text(row.company_short, DEFAULT_ORG.companyShort),
+    logoUrl: logoUrl(row.logo_path),
+    colorPrimary: color(row.color_primary, DEFAULT_ORG.colorPrimary),
+    colorSecondary: color(row.color_secondary, DEFAULT_ORG.colorSecondary),
+    assistantName: text(row.assistant_name, DEFAULT_ORG.assistantName),
+    source: "database",
+  };
+}
+
+/**
+ * Branding for pages shown before sign-in (login, forgot, set-password).
+ * public_branding() (migration 0004) is callable by anon; until 0004 is
+ * applied the RPC errors and the neutral defaults are used.
+ */
+export const getBranding = cache(async (): Promise<Org> => {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase.rpc("public_branding");
+    const row = Array.isArray(data) ? data[0] : null;
+    if (error || !row) return DEFAULT_ORG;
+    return fromBranding(row);
+  } catch {
+    return DEFAULT_ORG;
+  }
+});
+
 /**
  * The org_settings row, read once per request with the caller's session.
  * RLS only lets signed-in users read it (org_settings_read requires
- * auth.uid()), so signed-out pages such as /login get DEFAULT_ORG.
+ * auth.uid()); signed-out requests fall back to getBranding(), then to
+ * DEFAULT_ORG.
  */
 export const getOrg = cache(async (): Promise<Org> => {
   try {
     const supabase = await createClient();
     const { data, error } = await supabase.from("org_settings").select("*").limit(1).maybeSingle();
-    if (error || !data) return DEFAULT_ORG;
+    if (error || !data) return getBranding();
     return toOrg(data);
   } catch {
-    return DEFAULT_ORG;
+    return getBranding();
   }
 });
