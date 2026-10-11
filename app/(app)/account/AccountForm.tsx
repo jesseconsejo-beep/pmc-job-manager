@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { startTransition, useActionState } from "react";
 import { ErrorNote, Label } from "@/components/ui";
 import type { ActionResult } from "@/lib/validate";
 import { updateMyProfile } from "./actions";
@@ -8,7 +8,18 @@ import { updateMyProfile } from "./actions";
 export function AccountForm({ name, phone }: { name: string; phone: string }) {
   const [state, action, pending] = useActionState<ActionResult | null, FormData>(updateMyProfile, null);
   return (
-    <form action={action} className="space-y-3">
+    <form
+      // `action` covers a submit before hydration. Once hydrated, submit by hand
+      // inside a transition: React then skips its post-action field reset, so a
+      // failed save keeps what was typed.
+      action={action}
+      onSubmit={(e) => {
+        e.preventDefault();
+        const data = new FormData(e.currentTarget);
+        startTransition(() => action(data));
+      }}
+      className="space-y-3"
+    >
       <ErrorNote message={state && !state.ok ? state.error : null} />
       {state?.ok && (
         <div role="status" className="border border-ok bg-bg px-3 py-2 text-xs text-ok">
