@@ -26,8 +26,10 @@ docs/                  decisions, the Phase 1 artifact (UI spec), original hand-
 | 0003_org_settings | White-label settings, role + category catalogs, pay-period function | **to apply** |
 | 0004_public_branding | `public_branding()` for the signed-out pages (anon may call) | **to apply** |
 | 0005_role_tiers | Permission tiers (developer/owner/manager/employee), last-owner guard, super-only settings | **to apply** |
+| 0006_invite_lifecycle | Invites pending until first sign-in; profile deletes clear soft references | **to apply** |
+| 0007_tighten_folders | Photo paths bound to job/call, folder bucket policies, unique RFI/CO numbers, timesheets.updated_at, org contact block | **to apply** |
 
-Apply to prod in order by pasting 0002 then 0003 into the Supabase SQL editor
+Apply to prod in order by pasting 0002 through 0007 into the Supabase SQL editor
 (or `supabase db push` once the CLI is linked). Never edit tables in the dashboard.
 
 ### After applying 0002 in the Supabase dashboard
@@ -60,7 +62,7 @@ npm test
 
 Boots Postgres 17 locally (no Docker), installs stubs for Supabase's `auth` and
 `storage` schemas, applies every migration, then runs 34 scenarios as owner, PM,
-foreman, deactivated user, uninvited signup and anon. `MIGRATE_UPTO=0001 npm test`
+foreman, deactivated user, uninvited signup and anon (48 scenarios). `MIGRATE_UPTO=0001 npm test`
 shows the same attacks succeeding against the unhardened baseline.
 
 ## Security model (enforced in the database, verified by the suite)
