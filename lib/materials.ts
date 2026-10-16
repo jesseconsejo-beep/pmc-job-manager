@@ -244,3 +244,47 @@ export function mailtoHref(to: string[], subject: string, body: string): string 
   const enc = (s: string) => encodeURIComponent(s.replace(/\r?\n/g, "\r\n"));
   return `mailto:${to.join(",")}?subject=${enc(subject)}&body=${enc(body)}`;
 }
+
+// ---------- the Today view ----------
+
+/** One outstanding delivery on the Today view. */
+export type DeliveryWatch = {
+  id: string;
+  jobId: string;
+  supplier: string;
+  /** The one item's description, or "3 items (1/3 received)". */
+  summary: string;
+  /** "12 ea" for a one-item order, else "". */
+  qty: string;
+  expected: string;
+  overdue: boolean;
+};
+
+/**
+ * Deliveries to watch (Phase 1 TodayView): orders with items still out whose
+ * expected date is today (due) or already past (overdue). Empty, undated and
+ * job-less orders are skipped. Overdue first, oldest first; then today's.
+ */
+export function deliveriesToWatch(
+  orders: readonly Pick<MaterialOrder, "id" | "job_id" | "supplier" | "expected_date" | "items">[],
+  today: string,
+): DeliveryWatch[] {
+  const out: DeliveryWatch[] = [];
+  for (const o of orders) {
+    if (!o.job_id || !isIsoDate(o.expected_date) || o.expected_date > today) continue;
+    const items = itemsOf(o);
+    const { received, total } = receivedCount(o);
+    if (total === 0 || received === total) continue;
+    const one = total === 1 ? items[0] : null;
+    out.push({
+      id: o.id,
+      jobId: o.job_id,
+      supplier: o.supplier?.trim() || "Supplier",
+      summary: one ? one.description.trim() || "1 item" : `${total} items (${received}/${total} received)`,
+      qty: one ? qtyUnit(one) : "",
+      expected: o.expected_date,
+      overdue: o.expected_date < today,
+    });
+  }
+  return out.sort((a, b) => Number(b.overdue) - Number(a.overdue) || a.expected.localeCompare(b.expected));
+}

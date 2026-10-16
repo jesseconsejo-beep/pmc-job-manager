@@ -17,8 +17,12 @@ const TYPE_COLORS: Record<string, string> = {
   task: "var(--color-primary)",
   contact: "var(--color-secondary)",
   rfi: "var(--color-warn)",
-  co: "var(--color-warn)",
+  change_order: "var(--color-warn)",
+  co: "var(--color-warn)", // Phase 1 rows
+  tool: "var(--color-ink)",
   photo: "var(--color-secondary)",
+  material: "var(--color-ink)",
+  file: "var(--color-secondary)",
   progress: "var(--color-primary)",
   update: "var(--color-dim)",
 };

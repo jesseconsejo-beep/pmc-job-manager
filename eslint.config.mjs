@@ -21,6 +21,7 @@ const eslintConfig = [
       "docs/**",
       "supabase/**",
       "tools/**",
+      ".claude/**",
     ],
   },
 ];

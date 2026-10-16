@@ -38,6 +38,7 @@
     "node_modules",
     "docs",
     "supabase",
-    "tools"
+    "tools",
+    ".claude"
   ]
 }
