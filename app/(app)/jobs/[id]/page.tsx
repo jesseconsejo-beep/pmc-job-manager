@@ -57,7 +57,7 @@ export default async function JobPage({ params }: Params) {
   const open = taskCounts(tasksRes.data ?? []).open;
   const activityCount = activityRes.count ?? 0;
 
-  // Folder order follows the Phase 1 JobView. Only Tasks and Activity Feed are live.
+  // Folder order follows the Phase 1 JobView. Each folder is its own route under /jobs/[id]/.
   const folders: Folder[] = [
     {
       id: "tasks",
@@ -67,14 +67,14 @@ export default async function JobPage({ params }: Params) {
       href: `/jobs/${id}/tasks`,
       count: `${open} OPEN`,
     },
-    { id: "ifcs", label: "IFCs", icon: FileText, color: "var(--color-secondary)" },
-    { id: "shop-drawings", label: "Shop Drawings", icon: FileText, color: "var(--color-secondary)" },
-    { id: "rfis", label: "RFIs", icon: CircleAlert, color: "var(--color-warn)" },
-    { id: "change-orders", label: "Change Orders", icon: ClipboardList, color: "var(--color-warn)" },
-    { id: "tools", label: "Tools", icon: Wrench, color: "var(--color-ink)" },
-    { id: "photos", label: "Photos", icon: Camera, color: "var(--color-secondary)" },
-    { id: "materials", label: "Material Orders", icon: Package, color: "var(--color-ink)" },
-    { id: "progress", label: "Progress Report", icon: BarChart3, color: "var(--color-primary)" },
+    { id: "ifcs", label: "IFCs", icon: FileText, color: "var(--color-secondary)", href: `/jobs/${id}/ifcs` },
+    { id: "shop-drawings", label: "Shop Drawings", icon: FileText, color: "var(--color-secondary)", href: `/jobs/${id}/shop-drawings` },
+    { id: "rfis", label: "RFIs", icon: CircleAlert, color: "var(--color-warn)", href: `/jobs/${id}/rfis` },
+    { id: "change-orders", label: "Change Orders", icon: ClipboardList, color: "var(--color-warn)", href: `/jobs/${id}/change-orders` },
+    { id: "tools", label: "Tools", icon: Wrench, color: "var(--color-ink)", href: `/jobs/${id}/tools` },
+    { id: "photos", label: "Photos", icon: Camera, color: "var(--color-secondary)", href: `/jobs/${id}/photos` },
+    { id: "materials", label: "Material Orders", icon: Package, color: "var(--color-ink)", href: `/jobs/${id}/materials` },
+    { id: "progress", label: "Progress Report", icon: BarChart3, color: "var(--color-primary)", href: `/jobs/${id}/progress` },
     {
       id: "activity",
       label: "Activity Feed",
@@ -99,7 +99,7 @@ export default async function JobPage({ params }: Params) {
             <>
               <Icon size={22} className="mb-2.5" style={{ color: f.href ? f.color : "var(--color-faint)" }} />
               <div className="font-display text-sm font-semibold uppercase tracking-wider">{f.label}</div>
-              <div className="mt-1 text-[10px] tracking-wider text-dim">{f.href ? f.count : "COMING SOON"}</div>
+              <div className="mt-1 text-[10px] tracking-wider text-dim">{f.href ? (f.count ?? "") : "COMING SOON"}</div>
             </>
           );
           return f.href ? (

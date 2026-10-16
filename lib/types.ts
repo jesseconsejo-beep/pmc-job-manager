@@ -1,5 +1,5 @@
 // Hand-written row types for the tables this app touches.
-// Source of truth: supabase/migrations/0001..0005. Keep in step with them.
+// Source of truth: supabase/migrations/0001..0006. Keep in step with them.
 
 export type JobStatus = "active" | "on_hold" | "complete" | "archived";
 export const JOB_STATUSES: readonly JobStatus[] = ["active", "on_hold", "complete", "archived"];
@@ -155,6 +155,231 @@ export type ProgressCategory = {
   active: boolean;
 };
 
+
+// ---- Per-job folders ----
+
+export type RfiStatus = "issued" | "action" | "complete";
+export const RFI_STATUSES: readonly RfiStatus[] = ["issued", "action", "complete"];
+
+export type Rfi = {
+  id: string;
+  job_id: string | null;
+  rfi_number: string | null;
+  date_issued: string | null;
+  subject: string;
+  drawing_ref: string | null;
+  question: string | null;
+  response: string | null;
+  impact: string | null;
+  status: RfiStatus;
+  assigned_to: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type ChangeOrder = {
+  id: string;
+  job_id: string | null;
+  co_number: string | null;
+  date_issued: string | null;
+  subject: string;
+  drawing_ref: string | null;
+  description: string | null;
+  cost_impact: number | null;
+  schedule_impact_days: number | null;
+  impact: string | null;
+  status: RfiStatus;
+  created_by: string | null;
+  created_at: string;
+};
+
+/** One line inside material_orders.items (jsonb). */
+export type MaterialItem = {
+  id: string;
+  description: string;
+  qty: number | null;
+  unit: string | null;
+  received: boolean;
+  received_at: string | null;
+};
+
+export type MaterialOrder = {
+  id: string;
+  job_id: string | null;
+  supplier: string | null;
+  supplier_email: string | null;
+  po_number: string | null;
+  order_date: string | null;
+  expected_date: string | null;
+  notes: string | null;
+  items: MaterialItem[];
+  last_sent_at: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type Tool = {
+  id: string;
+  job_id: string | null;
+  name: string;
+  dropped_by_id: string | null;
+  dropped_by_text: string | null;
+  dropped_date: string | null;
+  picked_up: boolean;
+  picked_up_by_id: string | null;
+  picked_up_by_text: string | null;
+  picked_up_date: string | null;
+  checked: boolean;
+  created_at: string;
+};
+
+/** photos.storage_path convention: job/<job_id>/<file> or sc/<service_call_id>/<file>. */
+export type Photo = {
+  id: string;
+  job_id: string | null;
+  service_call_id: string | null;
+  storage_path: string;
+  caption: string | null;
+  date: string | null;
+  taken_by: string | null;
+  taken_at: string;
+};
+
+export type JobFileType = "ifc" | "shop_drawing" | "other";
+
+export type JobFile = {
+  id: string;
+  job_id: string | null;
+  file_type: JobFileType;
+  name: string;
+  revision: string | null;
+  date_issued: string | null;
+  storage_path: string | null;
+  external_url: string | null;
+  notes: string | null;
+  uploaded_by: string | null;
+  uploaded_at: string;
+};
+
+// ---- Top-level modules ----
+
+export type ServiceStatus = "upcoming" | "in_progress" | "complete" | "cancelled";
+export const SERVICE_STATUSES: readonly ServiceStatus[] = ["upcoming", "in_progress", "complete", "cancelled"];
+
+/** One visit line inside service_calls.work_entries (jsonb). */
+export type WorkEntry = {
+  id: string;
+  date: string | null;
+  worker_id: string | null;
+  worker_name: string | null;
+  hours: number | null;
+  material_source: string | null;
+  parking: string | null;
+  notes: string | null;
+};
+
+export type ServiceCall = {
+  id: string;
+  service_code: string | null;
+  customer_name: string | null;
+  company_name: string | null;
+  customer_phone: string | null;
+  customer_po: string | null;
+  address: string | null;
+  project_name: string | null;
+  scheduled_date: string | null;
+  status: ServiceStatus;
+  work_report: string | null;
+  work_entries: WorkEntry[];
+  total_cost: number | null;
+  completed_at: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+/** One day cell in a timesheet row: hours as numbers, null = blank. */
+export type HourCell = { reg: number | null; ot: number | null; dt: number | null };
+
+/** One job line inside timesheets.rows (jsonb): 14 day cells, first day of week 1 first. */
+export type TimesheetRow = {
+  id: string;
+  job_code: string | null;
+  job_name: string | null;
+  hours: HourCell[];
+};
+
+export type Timesheet = {
+  id: string;
+  employee_id: string | null;
+  employee_name: string | null;
+  week1_ending: string;
+  week2_ending: string;
+  rows: TimesheetRow[];
+  total_hours: number;
+  total_reg: number;
+  total_ot: number;
+  total_dt: number;
+  notes: string | null;
+  approved: boolean;
+  approved_at: string | null;
+  approved_by: string | null;
+  submitted_at: string | null;
+  created_at: string;
+};
+
+export type ScheduleEventType = "holiday" | "vacation" | "dayoff" | "event";
+export const SCHEDULE_EVENT_TYPES: readonly ScheduleEventType[] = ["holiday", "vacation", "dayoff", "event"];
+
+export type ScheduleEvent = {
+  id: string;
+  title: string;
+  event_type: ScheduleEventType;
+  start_date: string;
+  end_date: string | null;
+  who_id: string | null;
+  who_text: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type BulletinPost = {
+  id: string;
+  title: string;
+  body: string | null;
+  author_id: string | null;
+  author_name: string | null;
+  pinned: boolean;
+  archived: boolean;
+  created_at: string;
+};
+
+export type LibraryCategory = "codes" | "manuals" | "specs" | "pmc_standards" | "safety";
+export const LIBRARY_CATEGORIES: readonly LibraryCategory[] = ["codes", "manuals", "specs", "pmc_standards", "safety"];
+
+export type LibraryDoc = {
+  id: string;
+  category: LibraryCategory;
+  title: string;
+  edition: string | null;
+  publisher: string | null;
+  tags: string | null;
+  notes: string | null;
+  storage_path: string | null;
+  external_url: string | null;
+  uploaded_by: string | null;
+  uploaded_at: string;
+};
+
+export type JobAssignment = {
+  job_id: string;
+  user_id: string;
+  role_on_job: string | null;
+  assigned_at: string;
+};
+
+export type PayPeriod = { period_start: string; period_end: string };
+
 // ---- Database shape for the typed Supabase client ----
 
 type Table<Row, Required extends keyof Row> = {
@@ -176,11 +401,23 @@ export type Database = {
       progress_categories: Table<ProgressCategory, "key" | "label">;
       role_catalog: Table<RoleCatalogRow, "key" | "label" | "rank">;
       invites: Table<Invite, "email">;
-      timesheets: Table<{ id: string; employee_id: string | null }, "id">;
+      timesheets: Table<Timesheet, "week1_ending" | "week2_ending">;
+      rfis: Table<Rfi, "subject">;
+      change_orders: Table<ChangeOrder, "subject">;
+      material_orders: Table<MaterialOrder, never>;
+      tools: Table<Tool, "name">;
+      photos: Table<Photo, "storage_path">;
+      job_files: Table<JobFile, "file_type" | "name">;
+      service_calls: Table<ServiceCall, never>;
+      schedule_events: Table<ScheduleEvent, "title" | "start_date">;
+      bulletin_posts: Table<BulletinPost, "title">;
+      library_docs: Table<LibraryDoc, "category" | "title">;
+      job_assignments: Table<JobAssignment, "job_id" | "user_id">;
     };
     Views: { [_ in never]: never };
     Functions: {
       public_branding: { Args: Record<string, never>; Returns: PublicBranding[] };
+      pay_period_bounds: { Args: { d: string }; Returns: PayPeriod[] };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };

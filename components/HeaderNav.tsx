@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings, User, Users, type LucideIcon } from "lucide-react";
+import { Calendar, ClipboardList, Clock, Settings, User, Users, type LucideIcon } from "lucide-react";
 
 type Btn = { href: string; label: string; icon: LucideIcon; title: string; iconOnlyOnPhone?: boolean };
 
@@ -13,7 +13,11 @@ type Btn = { href: string; label: string; icon: LucideIcon; title: string; iconO
  */
 export function HeaderNav({ admin, superUser, initials }: { admin: boolean; superUser: boolean; initials: string }) {
   const pathname = usePathname();
-  const buttons: Btn[] = [];
+  const buttons: Btn[] = [
+    { href: "/schedule", label: "Schedule", icon: Calendar, title: "Company schedule", iconOnlyOnPhone: true },
+    { href: "/bulletin", label: "Bulletin", icon: ClipboardList, title: "Crew bulletin board", iconOnlyOnPhone: true },
+    { href: "/timesheets", label: "Hours", icon: Clock, title: "Timesheets", iconOnlyOnPhone: true },
+  ];
   if (admin) buttons.push({ href: "/crew", label: "Crew", icon: Users, title: "Manage crew" });
   if (superUser)
     buttons.push({ href: "/settings", label: "Settings", icon: Settings, title: "Company settings", iconOnlyOnPhone: true });
