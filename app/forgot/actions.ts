@@ -19,7 +19,7 @@ export async function requestReset(_prev: ForgotState, form: FormData): Promise<
   try {
     const supabase = await createClient();
     const origin = await siteOrigin();
-    await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${origin}/auth/confirm` });
+    await supabase.auth.resetPasswordForEmail(email, { redirectTo: `${origin}/auth/confirm?type=recovery` });
   } catch {
     // Same answer either way (rate limits, unknown address, mail errors).
   }

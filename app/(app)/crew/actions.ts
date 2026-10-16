@@ -61,7 +61,7 @@ async function sendAuthInvite(email: string, name: string | null): Promise<strin
     const origin = await siteOrigin();
     const { error } = await admin.auth.admin.inviteUserByEmail(email, {
       data: name ? { name } : undefined,
-      redirectTo: `${origin}/auth/confirm`,
+      redirectTo: `${origin}/auth/confirm?type=invite`,
     });
     return error ? error.message : null;
   } catch (e) {

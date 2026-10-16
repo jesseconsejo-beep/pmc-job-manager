@@ -12,15 +12,29 @@ const TYPES: readonly EmailOtpType[] = ["signup", "invite", "magiclink", "recove
  * invite or reset goes on to choose a password.
  */
 export async function GET(request: NextRequest) {
-  const tokenHash = request.nextUrl.searchParams.get("token_hash");
-  const typeRaw = request.nextUrl.searchParams.get("type");
+  const params = request.nextUrl.searchParams;
+  const tokenHash = params.get("token_hash");
+  const code = params.get("code");
+  const typeRaw = params.get("type");
   const type = TYPES.find((t) => t === typeRaw);
 
-  if (!tokenHash || !type) redirect("/login?error=link");
-
   const supabase = await createClient();
-  const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
-  if (error) redirect("/login?error=link");
 
-  redirect(type === "invite" || type === "recovery" ? "/set-password" : "/");
+  if (tokenHash && type) {
+    // Custom templates: {{ .SiteURL }}/auth/confirm?token_hash=...&type=...
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
+    if (error) redirect("/login?error=link");
+    redirect(type === "invite" || type === "recovery" ? "/set-password" : "/");
+  }
+
+  if (code) {
+    // Default templates ({{ .ConfirmationURL }}): Supabase redirects here with a
+    // one-time code; the exchange needs the cookie set when the email was requested.
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) redirect("/login?error=link");
+    // Every email this app sends (invite, reset) ends in choosing a password.
+    redirect(type === "signup" || type === "magiclink" || type === "email_change" || type === "email" ? "/" : "/set-password");
+  }
+
+  redirect("/login?error=link");
 }
