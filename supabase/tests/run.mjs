@@ -389,6 +389,59 @@ async function main() {
     await expectError(as(matt, `delete from profiles where id = $1`, [dan]), /violates foreign key|still referenced/);
   });
 
+  console.log('\nfolder guards (0007)');
+  await test('photo rows are bound to their job path and stamped with the actor', async () => {
+    await expectError(as(eve, `insert into photos (job_id, storage_path) values ($1, $2)`, [job, 'job/00000000-0000-0000-0000-000000000000/x.jpg']), /Photo path must be under/);
+    await expectError(as(eve, `insert into photos (job_id, storage_path) values ($1, $2)`, [job, `job/${job}/../x.jpg`]), /Photo path must be under/);
+    const r = await as(eve, `insert into photos (job_id, storage_path, taken_by) values ($1, $2, $3) returning taken_by`, [job, `job/${job}/bound.jpg`, matt]);
+    eq(r.rows[0].taken_by, eve, 'taken_by forced to actor');
+    await expectError(as(eve, `insert into photos (job_id, storage_path) values ($1, $2)`, [job, `job/${job}/bound.jpg`]), /duplicate key|unique/);
+    await expectError(as(eve, `update photos set storage_path = $2 where storage_path = $1`, [`job/${job}/bound.jpg`, `job/${job}/other.jpg`]), /re-pointed/);
+  });
+  await test('service-call photos need a real call and exactly one parent', async () => {
+    await expectError(as(eve, `insert into photos (service_call_id, storage_path) values ('00000000-0000-0000-0000-000000000001', 'sc/00000000-0000-0000-0000-000000000001/a.jpg')`), /foreign key/);
+    await expectError(as(eve, `insert into photos (storage_path) values ('job/x/a.jpg')`), /photos_one_parent_check|row-level security/);
+    const sc = (await as(matt, `insert into service_calls (service_code, customer_name) values ('S2026-001', 'Test') returning id`)).rows[0].id;
+    await expectError(as(eve, `insert into photos (service_call_id, storage_path) values ($1, $2)`, [sc, `job/${job}/sneaky.jpg`]), /Photo path must be under sc\//);
+    const ok = await as(eve, `insert into photos (service_call_id, storage_path) values ($1, $2) returning id`, [sc, `sc/${sc}/visit.jpg`]);
+    eq(ok.rowCount, 1, 'service photo inserted');
+  });
+  await test('admins see orphaned photo objects; crew still do not', async () => {
+    await as(null, `insert into storage.objects (bucket_id, name) values ('photos', 'job/orphan/old.jpg')`);
+    const admin = await as(matt, `select count(*)::int as n from storage.objects where name = 'job/orphan/old.jpg'`);
+    eq(admin.rows[0].n, 1, 'admin sees orphan');
+    const crew = await as(eve, `select count(*)::int as n from storage.objects where name = 'job/orphan/old.jpg'`);
+    eq(crew.rows[0].n, 0, 'crew does not');
+  });
+  await test('job-files objects are deleted only by their uploader or an admin', async () => {
+    await as(dan, `insert into storage.objects (bucket_id, name) values ('job-files', $1)`, [`job/${job}/plan.pdf`]);
+    await as(dan, `insert into job_files (job_id, file_type, name, storage_path, uploaded_by) values ($1, 'ifc', 'Plan', $2, $3)`, [job, `job/${job}/plan.pdf`, dan]);
+    const other = await as(eve, `delete from storage.objects where name = $1`, [`job/${job}/plan.pdf`]);
+    eq(other.rowCount, 0, 'other member');
+    const mine = await as(dan, `delete from storage.objects where name = $1`, [`job/${job}/plan.pdf`]);
+    eq(mine.rowCount, 1, 'uploader');
+  });
+  await test('only managers and above change a job\'s categories', async () => {
+    await expectError(as(dan, `update jobs set enabled_categories = array['hvac'] where id = $1`, [job]), /Only managers and above can change/);
+    const ok = await as(dan, `update jobs set notes = 'crew note' where id = $1`, [job]);
+    eq(ok.rowCount, 1, 'other job edits still fine');
+    const admin = await as(scott, `update jobs set enabled_categories = array['hvac','controls'] where id = $1 returning enabled_categories`, [job]);
+    eq(admin.rows[0].enabled_categories, ['hvac', 'controls'], 'manager');
+  });
+  await test('RFI and CO numbers are unique per job', async () => {
+    await as(dan, `insert into rfis (job_id, rfi_number, subject) values ($1, 'RFI-001', 'a')`, [job]);
+    await expectError(as(dan, `insert into rfis (job_id, rfi_number, subject) values ($1, 'rfi-001', 'b')`, [job]), /duplicate key|unique/);
+    await as(dan, `insert into change_orders (job_id, co_number, subject) values ($1, 'CO-001', 'a')`, [job]);
+    await expectError(as(dan, `insert into change_orders (job_id, co_number, subject) values ($1, 'CO-001', 'b')`, [job]), /duplicate key|unique/);
+  });
+  await test('timesheets carry updated_at and settings carry the contact block', async () => {
+    const t = (await as(dan, `insert into timesheets (employee_id, week1_ending, week2_ending) values ($1, '2026-10-24', '2026-10-31') returning id, updated_at`, [dan])).rows[0];
+    const u = await as(dan, `update timesheets set notes = 'x' where id = $1 returning updated_at`, [t.id]);
+    if (!(new Date(u.rows[0].updated_at) >= new Date(t.updated_at))) throw new Error('updated_at did not move');
+    const o = await as(matt, `update org_settings set company_phone = '604-555-0100', company_address = '123 Example St, Surrey BC' returning company_phone`);
+    eq(o.rows[0].company_phone, '604-555-0100', 'contact block');
+  });
+
   console.log(`\n${passes} passed, ${failures} failed`);
   await client.end();
   await epg.stop();
