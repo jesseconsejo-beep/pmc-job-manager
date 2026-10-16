@@ -124,3 +124,20 @@ create trigger timesheets_set_updated_at before update on timesheets
 alter table org_settings add column if not exists company_phone text;
 alter table org_settings add column if not exists company_email text;
 alter table org_settings add column if not exists company_address text;
+
+-- ------------------------------------------------------------
+-- 8. photo visibility: service-call photos follow service calls (every
+--    active member, day one); job photos stay tiered by assignment; a
+--    person always sees the photos they took.
+-- ------------------------------------------------------------
+drop policy if exists photos_tiered_read on photos;
+create policy photos_tiered_read on photos for select using (
+  is_active_member() and (
+    is_owner_or_admin()
+    or taken_by = auth.uid()
+    or service_call_id is not null
+    or (job_id is not null and exists (
+      select 1 from job_assignments a
+      where a.job_id = photos.job_id and a.user_id = auth.uid()))
+  )
+);
