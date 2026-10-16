@@ -192,15 +192,6 @@ export function sheetDays(week2Ending: string): SheetDay[] {
   });
 }
 
-/**
- * The last day of a week that starts on weekStartDow (0 = Sunday), on or after
- * today. With the default week start (Sunday) this is the Saturday on or after today.
- */
-export function weekEndOnOrAfter(today: string, weekStartDow: number): string {
-  const endDow = (((weekStartDow + 6) % 7) + 7) % 7;
-  return addDays(today, (endDow - weekdayOf(today) + 7) % 7);
-}
-
 /** "SAT OCT 17" */
 export function shortDay(iso: string): string {
   return formatDate(iso, { weekday: "short", month: "short", day: "numeric" }).replace(/,/g, "").toUpperCase();
@@ -302,27 +293,37 @@ export async function loadSheetSettings(supabase: Client): Promise<SheetSettings
   };
 }
 
-export type Periods = {
-  /** week2_ending for the period containing today. */
-  current: string;
-  /** week2_ending for the period before it. */
-  previous: string;
-  /** "anchor" = org_settings.pay_period_anchor_end via pay_period_bounds(); "fallback" = no anchor set. */
-  source: "anchor" | "fallback";
-};
+export type Periods =
+  | {
+      /** org_settings.pay_period_anchor_end via pay_period_bounds(). */
+      source: "anchor";
+      /** week2_ending for the period containing today. */
+      current: string;
+      /** week2_ending for the period before it. */
+      previous: string;
+    }
+  | {
+      /** No anchor set (or the lookup failed): there is no period to start a sheet in. */
+      source: "unset";
+    };
+
+/** Shown wherever a sheet would be started while no pay period is configured. */
+export const NO_PERIOD_MESSAGE =
+  "The pay period is not set up yet. A real pay-period end date has to be set in Company settings before timesheets can be started.";
 
 /**
  * Current and previous period ends. pay_period_bounds(d) is the one place the
- * database computes the period (zero rows until an anchor is set); only then
- * fall back to the week end on or after today.
+ * database computes the period (zero rows until an anchor is set). There is
+ * deliberately no guessed fallback: a guess would not line up with the real
+ * grid, so successive guessed sheets overlap and lock once the anchor is set
+ * (timesheet_period_check).
  */
-export async function resolvePeriods(supabase: Client, today: string, settings: SheetSettings): Promise<Periods> {
+export async function resolvePeriods(supabase: Client, today: string): Promise<Periods> {
   const { data, error } = await supabase.rpc("pay_period_bounds", { d: today });
   const row = !error && Array.isArray(data) ? data[0] : undefined;
   if (row && isIsoDate(row.period_end) && isIsoDate(row.period_start)) {
     // The day before this period starts is the previous period's end.
-    return { current: row.period_end, previous: addDays(row.period_start, -1), source: "anchor" };
+    return { source: "anchor", current: row.period_end, previous: addDays(row.period_start, -1) };
   }
-  const current = weekEndOnOrAfter(today, settings.weekStartDow);
-  return { current, previous: addDays(current, -settings.periodDays), source: "fallback" };
+  return { source: "unset" };
 }

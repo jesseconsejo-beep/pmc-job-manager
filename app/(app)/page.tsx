@@ -3,7 +3,7 @@ import { Calendar, Pin, User } from "lucide-react";
 import { EmptyNote, EmptyState, Page, SectionHeader, StatBlock } from "@/components/ui";
 import { TaskRow, type TaskRowData } from "@/components/TaskRow";
 import { pinnedPosts, recentPosts } from "@/lib/bulletin";
-import { dueBucket, formatDate, hourInZone, longDayLabel, relativeTime, todayInZone } from "@/lib/dates";
+import { dueBucket, formatDate, formatTimestamp, hourInZone, longDayLabel, relativeTime, todayInZone } from "@/lib/dates";
 import { deliveriesToWatch } from "@/lib/materials";
 import { getOrg } from "@/lib/org";
 import { loadPeople, nameMap } from "@/lib/people";
@@ -21,6 +21,9 @@ const WEEK_PREVIEW = 5;
 const EVENT_PREVIEW = 4;
 const RFI_PREVIEW = 5;
 const SCHEDULE_DAYS = 14;
+const ACTIVITY_PREVIEW = 8;
+/** Read a few extra so rows on archived or hidden jobs can be dropped and still fill the list. */
+const ACTIVITY_FETCH = 30;
 
 /** First `n` characters of a post body, with an ellipsis when cut. */
 function clip(text: string | null, n: number): string | null {
@@ -35,7 +38,7 @@ export default async function TodayPage() {
   const supabase = await createClient();
   const today = todayInZone(org.timezone);
 
-  const [jobsRes, tasksRes, catsRes, people, pinned, latest, events, ordersRes, rfisRes] = await Promise.all([
+  const [jobsRes, tasksRes, catsRes, people, pinned, latest, events, ordersRes, rfisRes, activityRes] = await Promise.all([
     supabase
       .from("jobs")
       .select("id, job_number, job_name, status, progress, enabled_categories, created_at")
@@ -57,6 +60,13 @@ export default async function TodayPage() {
       .select("id, job_id, rfi_number, subject, created_at")
       .eq("status", "action")
       .order("created_at", { ascending: false }),
+    // Job activity only: rows without a job (service calls, company-wide) are not shown here.
+    supabase
+      .from("activity_log")
+      .select("id, job_id, description, user_name, occurred_at")
+      .not("job_id", "is", null)
+      .order("occurred_at", { ascending: false })
+      .limit(ACTIVITY_FETCH),
   ]);
 
   const jobs = jobsRes.data ?? [];
@@ -95,6 +105,10 @@ export default async function TodayPage() {
   const deliveries = deliveriesToWatch(ordersRes.data ?? [], today).filter((d) => jobById.has(d.jobId));
   const lateDeliveries = deliveries.filter((d) => d.overdue).length;
   const actionRfis = (rfisRes.data ?? []).filter((r) => r.job_id && jobById.has(r.job_id));
+  const recentActivity = (activityRes.data ?? [])
+    .filter((a) => a.job_id && jobById.has(a.job_id))
+    .slice(0, ACTIVITY_PREVIEW);
+  const now = new Date();
 
   const hour = hourInZone(org.timezone);
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -385,6 +399,36 @@ export default async function TodayPage() {
               })}
             </div>
           </section>
+
+          {recentActivity.length > 0 && (
+            <section className="mb-5">
+              <SectionHeader title="Recent activity" count={recentActivity.length} color="var(--color-secondary)" />
+              <div className="grid gap-1">
+                {recentActivity.map((a) => (
+                  <Link
+                    key={a.id}
+                    href={`/jobs/${a.job_id}/activity`}
+                    className="flex min-h-11 justify-between gap-2.5 border border-line bg-surface px-2.5 py-2 hover:border-line-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="break-words text-xs">{a.description}</div>
+                      <div className="mt-0.5 truncate text-[10px] text-dim">
+                        {a.job_id && jobById.get(a.job_id)?.job_name}
+                        {a.user_name && ` · ${a.user_name}`}
+                      </div>
+                    </div>
+                    <time
+                      dateTime={a.occurred_at}
+                      title={formatTimestamp(a.occurred_at, org.timezone)}
+                      className="whitespace-nowrap text-right text-[10px] text-faint"
+                    >
+                      {relativeTime(a.occurred_at, org.timezone, now)}
+                    </time>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
         </>
       )}
     </Page>

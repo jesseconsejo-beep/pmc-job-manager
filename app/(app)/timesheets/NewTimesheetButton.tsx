@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronRight, Plus, X } from "lucide-react";
 import { createTimesheet } from "./actions";
 import { ErrorNote, Label } from "@/components/ui";
 import type { Person } from "@/lib/people";
-import { periodRange, shortDay, type Periods } from "@/lib/timesheets";
-
-const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+import { NO_PERIOD_MESSAGE, periodRange, shortDay, type Periods } from "@/lib/timesheets";
 
 type Props = {
   periods: Periods;
@@ -17,7 +16,8 @@ type Props = {
   admin: boolean;
   me: string;
   people: Person[];
-  weekStartDow: number;
+  /** Owner/developer: may set the pay period in Company settings. */
+  canSetPeriod: boolean;
   variant?: "header" | "empty";
 };
 
@@ -49,7 +49,7 @@ function NewTimesheetModal({
   admin,
   me,
   people,
-  weekStartDow,
+  canSetPeriod,
   onClose,
 }: Props & { onClose: () => void }) {
   const router = useRouter();
@@ -75,11 +75,13 @@ function NewTimesheetModal({
     });
   };
 
-  const options = [
-    { which: "current" as const, title: "Current period", end: periods.current },
-    { which: "previous" as const, title: "Previous period", end: periods.previous },
-  ];
-  const endDay = WEEKDAYS[(weekStartDow + 6) % 7] ?? "Saturday";
+  const options =
+    periods.source === "anchor"
+      ? [
+          { which: "current" as const, title: "Current period", end: periods.current },
+          { which: "previous" as const, title: "Previous period", end: periods.previous },
+        ]
+      : [];
 
   return (
     <div
@@ -101,7 +103,21 @@ function NewTimesheetModal({
 
         <ErrorNote message={error} />
 
-        {admin && people.length > 0 && (
+        {options.length === 0 && (
+          <div role="status" className="border border-line-2 bg-bg p-3">
+            <p className="text-xs leading-relaxed text-dim">{NO_PERIOD_MESSAGE}</p>
+            {canSetPeriod && (
+              <Link
+                href="/settings"
+                className="mt-2 inline-flex min-h-11 items-center font-display text-[11px] font-bold uppercase tracking-[1.5px] text-brand"
+              >
+                Open Company settings <ChevronRight size={14} />
+              </Link>
+            )}
+          </div>
+        )}
+
+        {options.length > 0 && admin && people.length > 0 && (
           <div className="mb-4">
             <Label htmlFor="ts-employee">Employee</Label>
             <select
@@ -145,12 +161,6 @@ function NewTimesheetModal({
             );
           })}
         </div>
-
-        {periods.source === "fallback" && (
-          <p className="mt-3 text-[10px] leading-relaxed text-faint">
-            No pay-period anchor is set in company settings yet, so periods end on the {endDay} on or after today.
-          </p>
-        )}
       </div>
     </div>
   );

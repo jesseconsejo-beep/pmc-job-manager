@@ -2,11 +2,15 @@ import type { createClient } from "@/lib/supabase/server";
 
 type Client = Awaited<ReturnType<typeof createClient>>;
 
-/** event_type values written by this app (activity_log.event_type is free text). */
+/**
+ * event_type values written by this app (activity_log.event_type is free text).
+ * No "timesheet": every active member can read activity_log, and timesheet
+ * events (whose sheet, submitted, approved) are private per employee.
+ */
 export type ActivityType =
   | "job_created" | "update" | "contact" | "task"
   | "rfi" | "change_order" | "material" | "tool" | "photo" | "file" | "progress"
-  | "service" | "timesheet" | "schedule" | "bulletin" | "library";
+  | "service" | "schedule" | "bulletin" | "library";
 
 /**
  * Append one activity_log row. The database stamps user_id, user_name and

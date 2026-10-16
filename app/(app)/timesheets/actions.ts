@@ -1,8 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { logActivity } from "@/lib/activity";
-import { addDays, formatDate, todayInZone } from "@/lib/dates";
+import { addDays, todayInZone } from "@/lib/dates";
 import { getOrg } from "@/lib/org";
 import { requireMember, requireMemberWithRole } from "@/lib/session";
 import { createClient } from "@/lib/supabase/server";
@@ -10,7 +9,7 @@ import {
   blankRow,
   cleanRow,
   isRowId,
-  loadSheetSettings,
+  NO_PERIOD_MESSAGE,
   normalizeRows,
   resolvePeriods,
   sheetTotals,
@@ -18,29 +17,24 @@ import {
 import type { Timesheet, TimesheetRow } from "@/lib/types";
 import { cleanText, fail, isUuid, ok, type ActionResult } from "@/lib/validate";
 
-// Activity rows are readable by every member, so descriptions name the sheet
-// (whose, which period) but never carry hours, job lines or notes.
+// Timesheet events are deliberately NOT written to activity_log: every active
+// member can read that table (activity_member_read), and whose sheet exists,
+// when it was submitted and whether it was approved is private per employee.
+// The sheet row itself carries the history (submitted_at, approved_by,
+// approved_at), and only the employee and managers can read it.
 
 type Client = Awaited<ReturnType<typeof createClient>>;
-type SheetHead = Pick<Timesheet, "id" | "employee_id" | "employee_name" | "week2_ending" | "approved" | "rows">;
+type SheetHead = Pick<Timesheet, "id" | "approved" | "rows">;
 
 function refresh(id?: string) {
   revalidatePath("/timesheets");
   if (id) revalidatePath(`/timesheets/${id}`);
 }
 
-function periodLabel(week2: string): string {
-  return `period ending ${formatDate(week2, { month: "short", day: "numeric", year: "numeric" })}`;
-}
-
-function sheetLabel(sheet: Pick<Timesheet, "employee_name" | "week2_ending">): string {
-  return `${sheet.employee_name?.trim() || "Unnamed"} · ${periodLabel(sheet.week2_ending)}`;
-}
-
 async function loadHead(supabase: Client, id: string): Promise<SheetHead | null> {
   const { data } = await supabase
     .from("timesheets")
-    .select("id, employee_id, employee_name, week2_ending, approved, rows")
+    .select("id, approved, rows")
     .eq("id", id)
     .maybeSingle();
   return data ?? null;
@@ -72,6 +66,8 @@ export type CreateResult = { ok: true; id: string; existed: boolean } | { ok: fa
  * Start a sheet for the current or previous pay period. The period is worked
  * out here (never taken from the browser). If the sheet already exists, its id
  * comes back so the caller can open it. Managers may start one for anyone.
+ * No sheet is created until the company has a pay-period anchor: a guessed
+ * period would overlap the next one and lock once the anchor is set.
  */
 export async function createTimesheet(which: unknown, employeeId: unknown): Promise<CreateResult> {
   const m = await requireMemberWithRole();
@@ -79,8 +75,8 @@ export async function createTimesheet(which: unknown, employeeId: unknown): Prom
 
   const supabase = await createClient();
   const org = await getOrg();
-  const settings = await loadSheetSettings(supabase);
-  const periods = await resolvePeriods(supabase, todayInZone(org.timezone), settings);
+  const periods = await resolvePeriods(supabase, todayInZone(org.timezone));
+  if (periods.source !== "anchor") return { ok: false, error: NO_PERIOD_MESSAGE };
   const week2 = which === "previous" ? periods.previous : periods.current;
 
   let forId = m.userId;
@@ -121,11 +117,6 @@ export async function createTimesheet(which: unknown, employeeId: unknown): Prom
     .single();
   if (error || !data) return { ok: false, error: error?.message ?? "The timesheet was not created." };
 
-  await logActivity(supabase, {
-    type: "timesheet",
-    description: `Timesheet started: ${forName} · ${periodLabel(week2)}`,
-    metadata: { timesheet_id: data.id, week2_ending: week2 },
-  });
   refresh();
   return { ok: true, id: data.id, existed: false };
 }
@@ -154,11 +145,6 @@ export async function saveRow(sheetId: unknown, row: unknown): Promise<ActionRes
   const err = await writeRows(supabase, sheetId, next);
   if (err) return fail(err);
 
-  await logActivity(supabase, {
-    type: "timesheet",
-    description: `${idx >= 0 ? "Timesheet hours saved" : "Timesheet line added"}: ${sheetLabel(sheet)}`,
-    metadata: { timesheet_id: sheetId, row_id: clean.id },
-  });
   refresh();
   return ok();
 }
@@ -178,11 +164,6 @@ export async function removeRow(sheetId: unknown, rowId: unknown): Promise<Actio
   const err = await writeRows(supabase, sheetId, next);
   if (err) return fail(err);
 
-  await logActivity(supabase, {
-    type: "timesheet",
-    description: `Timesheet line removed: ${sheetLabel(sheet)}`,
-    metadata: { timesheet_id: sheetId, row_id: rowId },
-  });
   refresh();
   return ok();
 }
@@ -205,11 +186,6 @@ export async function saveNotes(sheetId: unknown, notes: unknown): Promise<Actio
   if (error) return fail(error.message);
   if (!data || data.length === 0) return fail(NOT_SAVED);
 
-  await logActivity(supabase, {
-    type: "timesheet",
-    description: `Timesheet notes updated: ${sheetLabel(sheet)}`,
-    metadata: { timesheet_id: sheetId },
-  });
   refresh(sheetId);
   return ok();
 }
@@ -231,11 +207,6 @@ export async function submitTimesheet(sheetId: unknown): Promise<ActionResult> {
   if (error) return fail(error.message);
   if (!data || data.length === 0) return fail(NOT_SAVED);
 
-  await logActivity(supabase, {
-    type: "timesheet",
-    description: `Timesheet submitted: ${sheetLabel(sheet)}`,
-    metadata: { timesheet_id: sheetId },
-  });
   refresh(sheetId);
   return ok();
 }
@@ -263,11 +234,6 @@ export async function setApproval(sheetId: unknown, approve: unknown): Promise<A
   if (error) return fail(error.message);
   if (!data || data.length === 0) return fail("Not saved: only managers can approve timesheets.");
 
-  await logActivity(supabase, {
-    type: "timesheet",
-    description: `Timesheet ${approve ? "approved" : "un-approved"}: ${sheetLabel(sheet)}`,
-    metadata: { timesheet_id: sheetId },
-  });
   refresh(sheetId);
   return ok();
 }
@@ -281,16 +247,10 @@ export async function deleteTimesheet(sheetId: unknown): Promise<ActionResult> {
     .from("timesheets")
     .delete()
     .eq("id", sheetId)
-    .select("id, employee_name, week2_ending");
+    .select("id");
   if (error) return fail(error.message);
-  const removed = data?.[0];
-  if (!removed) return fail("Not deleted: only managers can delete timesheets.");
+  if (!data?.[0]) return fail("Not deleted: only managers can delete timesheets.");
 
-  await logActivity(supabase, {
-    type: "timesheet",
-    description: `Timesheet deleted: ${sheetLabel(removed)}`,
-    metadata: { timesheet_id: sheetId },
-  });
   refresh();
   return ok();
 }

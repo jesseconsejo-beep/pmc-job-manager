@@ -11,6 +11,7 @@ import {
   STATUS_COLOR,
   fmtHours,
   loadSheetSettings,
+  NO_PERIOD_MESSAGE,
   periodRange,
   resolvePeriods,
   sheetStatus,
@@ -56,7 +57,7 @@ export default async function TimesheetsPage({
   if (status === "unapproved") crewQuery = crewQuery.eq("approved", false);
 
   const [periods, mineRes, crewRes, people] = await Promise.all([
-    resolvePeriods(supabase, today, settings),
+    resolvePeriods(supabase, today),
     supabase
       .from("timesheets")
       .select(LIST_COLUMNS)
@@ -75,7 +76,8 @@ export default async function TimesheetsPage({
   const names = new Map(people.map((p) => [p.id, p.name]));
   const mineByPeriod: Record<string, string> = {};
   for (const t of mine) mineByPeriod[t.week2_ending] = t.id;
-  const current = mine.find((t) => t.week2_ending === periods.current) ?? null;
+  const thisPeriod = periods.source === "anchor" ? periods.current : null;
+  const current = thisPeriod ? (mine.find((t) => t.week2_ending === thisPeriod) ?? null) : null;
 
   const cadence = settings.periodDays === 7 ? "Weekly" : "Bi-weekly";
   const newButtonProps = {
@@ -84,7 +86,7 @@ export default async function TimesheetsPage({
     admin: m.admin,
     me: m.userId,
     people: people.filter((p) => p.active),
-    weekStartDow: settings.weekStartDow,
+    canSetPeriod: m.super,
   };
 
   return (
@@ -128,15 +130,35 @@ export default async function TimesheetsPage({
 
       {crewView && <CrewFilter people={people} employee={employeeFilter} status={status} />}
 
-      {!crewView && (
+      {!crewView && !thisPeriod && (
+        <div
+          role="status"
+          className="mb-4 border border-line bg-surface p-3"
+          style={{ borderLeft: "4px solid var(--color-warn)" }}
+        >
+          <div className="text-[10px] uppercase tracking-[1.5px] text-dim">This period</div>
+          <div className="font-display text-base font-semibold uppercase tracking-wide">Pay period not set</div>
+          <p className="mt-1 text-[11px] leading-relaxed text-dim">{NO_PERIOD_MESSAGE}</p>
+          {m.super && (
+            <Link
+              href="/settings"
+              className="mt-2 inline-flex min-h-11 items-center border border-line-2 px-4 font-display text-xs font-semibold uppercase tracking-[1.5px] hover:border-brand"
+            >
+              Company settings
+            </Link>
+          )}
+        </div>
+      )}
+
+      {!crewView && thisPeriod && (
         <div
           className="mb-4 flex flex-wrap items-center justify-between gap-3 border border-line bg-surface p-3"
           style={{ borderLeft: `4px solid ${current ? STATUS_COLOR[sheetStatus(current)] : "var(--color-primary)"}` }}
         >
           <div className="min-w-0">
             <div className="text-[10px] uppercase tracking-[1.5px] text-dim">This period</div>
-            <div className="font-display text-base font-semibold uppercase tracking-wide">Ends {shortDay(periods.current)}</div>
-            <div className="text-[11px] text-dim">{periodRange(periods.current)}</div>
+            <div className="font-display text-base font-semibold uppercase tracking-wide">Ends {shortDay(thisPeriod)}</div>
+            <div className="text-[11px] text-dim">{periodRange(thisPeriod)}</div>
           </div>
           {current ? (
             <Link
