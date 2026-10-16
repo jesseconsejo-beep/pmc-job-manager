@@ -39,8 +39,13 @@ Apply to prod in order by pasting 0002 through 0007 into the Supabase SQL editor
 
 ### Auth emails (Supabase dashboard > Authentication)
 - URL Configuration: Site URL = the app's URL; add `<site>/auth/confirm` to Redirect URLs.
-- Email templates: Invite user link = `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite`;
-  Reset password link = `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery`.
+- Email templates can only be edited once custom SMTP is configured (Supabase free tier
+  ships fixed defaults). Until then the default link redirects to `<site>/auth/confirm?type=…&code=…`,
+  which the confirm route exchanges; the person must open the email on the same device
+  and browser that requested it. With custom SMTP (Resend is planned), set the templates to
+  `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite` / `…&type=recovery`
+  so links work from any device. The built-in mailer is rate-limited (a few emails per hour):
+  fine for one or two invites, not for onboarding the whole crew at once.
 - `SUPABASE_SECRET_KEY` must be set (server only) for invites and account deletion.
 
 ## Tenant bootstrap (new company)
