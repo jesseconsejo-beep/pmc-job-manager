@@ -7,6 +7,20 @@ every company-specific value lives in the database (`org_settings`, `role_catalo
 
 Stack: Next.js (App Router) + Supabase (Postgres, Auth, Storage) + Vercel.
 
+Plan and competitor audit: [PMC Job Manager Gameplan](https://claude.ai/code/artifact/4e9e6eb4-4945-49f6-bcbb-935a24871fd5).
+House rules for anyone working here, including Claude sessions: `CLAUDE.md`.
+
+## Working together
+
+1. Clone the repo, `npm install`, copy `.env.example` to `.env.local` and ask for the
+   dev database values (never commit them).
+2. Branch from `main`, commit small, open a pull request. CI runs lint, types, the
+   production build and the database suite; it must be green before merge.
+3. Every pull request gets a Vercel preview URL to try on a phone before merging.
+4. Decisions about scope, money, roles or privacy go in `docs/DECISIONS.md` first.
+5. Migrations are applied to a live database only on purpose and with a
+   verification query; see the migration table below.
+
 ## Layout
 
 ```
@@ -66,8 +80,8 @@ npm test
 ```
 
 Boots Postgres 17 locally (no Docker), installs stubs for Supabase's `auth` and
-`storage` schemas, applies every migration, then runs 34 scenarios as owner, PM,
-foreman, deactivated user, uninvited signup and anon (48 scenarios). `MIGRATE_UPTO=0001 npm test`
+`storage` schemas, applies every migration, then runs scenarios as owner, PM,
+foreman, deactivated user, uninvited signup and anon: 48 scenarios in about 40 seconds. `MIGRATE_UPTO=0001 npm test`
 shows the same attacks succeeding against the unhardened baseline.
 
 ## Security model (enforced in the database, verified by the suite)
